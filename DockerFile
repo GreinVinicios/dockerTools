@@ -1,0 +1,101 @@
+# Use the official Ubuntu image as the base image
+FROM ubuntu:20.04
+
+# Set environment variables for each tool version
+ENV KUBECTL_VERSION="v1.26.0"
+ENV AWS_CLI_VERSION="1.27.65"
+
+# Set the working directory in the container
+WORKDIR /root
+
+# Select the geographic area for tzdata
+ENV TZ=Etc/UTC
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
+# Install dependencies
+RUN apt-get update && \
+    apt-get install -y \
+    curl \
+    unzip \
+    apt-transport-https \
+    lsb-release \
+    software-properties-common \
+    zsh \
+    python3 \
+    python3-pip \
+    git \
+    npm \
+    docker.io
+
+# Install AWS CLI
+RUN pip3 install awscli==${AWS_CLI_VERSION}
+
+# Install gcloud
+RUN echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] http://packages.cloud.google.com/apt cloud-sdk main" | tee -a /etc/apt/sources.list.d/google-cloud-sdk.list && curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key --keyring /usr/share/keyrings/cloud.google.gpg  add - && apt-get update -y && apt-get install google-cloud-cli -y
+
+# Install kubectl
+RUN curl -LO "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl" && \
+    chmod +x kubectl && \
+    mv kubectl /usr/local/bin/
+
+# Install kubectx and kubens
+RUN git clone https://github.com/ahmetb/kubectx /opt/kubectx && \
+    ln -s /opt/kubectx/kubectx /usr/local/bin/kubectx && \
+    ln -s /opt/kubectx/kubens /usr/local/bin/kubens
+
+# Install Helm
+RUN curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+RUN chmod 700 get_helm.sh
+RUN ./get_helm.sh
+
+# Install Terraform
+RUN apt-get update && apt-get install -y gnupg software-properties-common
+
+# Set ZSH as the default shell
+ENV SHELL /usr/bin/zsh
+RUN chsh -s $(which zsh)
+
+# Install krew
+RUN curl https://krew.sh/ | bash
+ENV PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
+
+# Install kubectl neat
+RUN curl https://krew.sh/neat | bash
+
+# Add common Kubernetes aliases
+RUN echo "alias k='kubectl'" >> ~/.zshrc && \
+echo "alias kg='kubectl get'" >> ~/.zshrc && \
+echo "alias kd='kubectl describe'" >> ~/.zshrc && \
+echo "alias ke='kubectl edit'" >> ~/.zshrc && \
+echo "alias kgp='kubectl get pods'" >> ~/.zshrc && \
+echo "alias kcn='kubectl config set-context --current --namespace'" >> ~/.zshrc && \
+echo "alias kgss='kubectl get statefulset'" >> ~/.zshrc && \
+echo "alias kdss='kubectl describe statefulset'" >> ~/.zshrc && \
+echo "alias kgnp='kubectl get networkpolicy'" >> ~/.zshrc && \
+echo "alias kdnp='kubectl describe networkpolicy'" >> ~/.zshrc && \
+echo "alias kgpv='kubectl get pv'" >> ~/.zshrc && \
+echo "alias kdpv='kubectl describe pv'" >> ~/.zshrc && \
+echo "alias kgpvc='kubectl get pvc'" >> ~/.zshrc && \
+echo "alias kdpvc='kubectl describe pvc'" >> ~/.zshrc && \
+echo "alias kgsa='kubectl get serviceaccount'" >> ~/.zshrc && \
+echo "alias kdsa='kubectl describe serviceaccount'" >> ~/.zshrc && \
+echo "alias kdel='kubectl delete'" >> ~/.zshrc && \
+echo "alias kdelp='kubectl delete pod'" >> ~/.zshrc && \
+echo "alias kdelpforce='kubectl delete pod --grace-period=0 --force'" >> ~/.zshrc && \
+echo "alias kge='kubectl get events --sort-by="{.lastTimestamp}"'" >> ~/.zshrc && \
+echo "alias krolld='kubectl set env --env="LAST_MANUAL_ROLLING_RESTART=$(date --utc --iso-8601=seconds)" deployment'" >> ~/.zshrc && \
+echo "alias krollss='kubectl set env --env="LAST_MANUAL_ROLLING_RESTART=$(date --utc --iso-8601=seconds)" statefulset'" >> ~/.zshrc && \
+echo "alias wkgp='watch -n 1 kubectl get pods'" >> ~/.zshrc && \
+echo "alias wkgpw='watch -n 1 kubectl get pods --output wide'" >> ~/.zshrc && \
+echo "alias wkgpall='watch -n 1 kubectl get pods --all-namespaces --field-selector metadata.namespace!=kube-system'" >> ~/.zshrc && \
+echo "alias wkgpwall='watch -n 1 kubectl get pods --all-namespaces --field-selector metadata.namespace!=kube-system --output wide'" >> ~/.zshrc && \
+echo "alias kubectx='kubectl ctx'" >> ~/.zshrc && \
+echo "alias kubens='kubectl ns'" >> ~/.zshrc && \
+echo "alias keti='kubectl exec -it'" >> ~/.zshrc && \
+echo "alias kl='kubectl logs '" >> ~/.zshrc && \
+echo "alias klf='kubectl logs -f'" >> ~/.zshrc && \
+echo "alias kaf='kubectl apply -f'" >> ~/.zshrc && \
+echo "alias kdelf='kubectl delete -f'" >> ~/.zshrc
+
+# Start ZSH by default
+CMD [ "zsh" ]
